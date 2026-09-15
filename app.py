@@ -70,6 +70,8 @@ body{
   font-family:'Gothic A1',system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;
   font-size:15px;
   line-height:1.7;
+  word-break:keep-all;
+  overflow-wrap:break-word;
   color:var(--ink);
   background-color:var(--paper);
   background-image:radial-gradient(var(--ink) 1px,transparent 1.1px);
@@ -216,8 +218,8 @@ app.jinja_loader = DictLoader({
     {% if user %}
       <span class="menubar__who">{{ user['username'] }}</span>
     {% else %}
-      <a class="menuitem" href="{{ url_for('login') }}">로그인</a>
-      <a class="menuitem" href="{{ url_for('register') }}">회원가입</a>
+      {% if request.endpoint != 'login' %}<a class="menuitem" href="{{ url_for('login') }}">로그인</a>{% endif %}
+      {% if request.endpoint != 'register' %}<a class="menuitem" href="{{ url_for('register') }}">회원가입</a>{% endif %}
     {% endif %}
   </div>
 </nav>
@@ -246,7 +248,7 @@ app.jinja_loader = DictLoader({
 {% block body %}
   {% if user %}
     <p class="lead">{{ user['username'] }}님, 로그인 상태입니다.</p>
-    <p class="note">메모 기능은 아직 없습니다. 지금은 계정을 만들고 로그인하는 것까지 됩니다.</p>
+    <p class="note">메모 기능은 아직 없습니다. 지금은 계정 만들기와 로그인까지 됩니다.</p>
     <form class="actions" method="post" action="{{ url_for('logout') }}">
       <button class="btn" type="submit">로그아웃</button>
     </form>
