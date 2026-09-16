@@ -17,4 +17,6 @@ jobs:
           script: |
             cd test_proj
             git pull
-            docker compose up -d --build
+            # 강의 실습용 취약 버전으로 배포한다.
+            # 정상 버전으로 되돌리려면 VULN=0 으로 바꾸고 다시 푸시하면 된다.
+            VULN=1 docker compose up -d --build

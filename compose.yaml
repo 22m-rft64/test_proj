@@ -6,6 +6,9 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # 강의용 취약점 스위치. 1이면 뚫리는 버전, 0(기본)이면 정상 버전.
+      VULN: "${VULN:-0}"
     restart: unless-stopped
 
   caddy:
