@@ -6,7 +6,7 @@ from jinja2 import DictLoader
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "memo.db")
+DB_PATH = os.path.join(BASE_DIR, "data", "memo.db")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -29,7 +29,7 @@ def close_db(exc):
 
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(DB_PATH, exist_ok=True) as db:
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -60,8 +60,7 @@ def inject_user():
 # 디더 점 패턴 바탕. 애플 6색은 메뉴바 로고에서 페이지당 한 번만 쓴다.
 
 CSS = """
-:root{ --ink:#000; --paper:#fff; }
-
+:root{ --ink:#fff; --paper:#000; }
 *,*::before,*::after{ box-sizing:border-box; }
 
 body{
