@@ -14,7 +14,20 @@ DB_PATH = os.path.join(BASE_DIR, "data", "memo.db")
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
 ADMIN_MEMO_TITLE = "대외비"
-ADMIN_MEMO_BODY = os.environ.get("FLAG", "SBOB{0nly_4dm1n_c4n_r34d_h1s_0wn_m3m0}")
+
+# 취약점마다 플래그가 하나씩. 각 플래그는 "그 취약점으로만" 닿을 수 있는 자리에 둔다.
+#   A  웹 IDOR    admin 메모의 본문        -> /memos/1 을 남이 열어야 보인다
+#   E  API IDOR   admin 메모의 secret 컬럼 -> API만 이 컬럼을 직렬화한다. 화면엔 안 나온다
+#   B  쿠키 신뢰  /admin 화면 안           -> 관리자 페이지에 들어가야 보인다
+#   C  SQLi       notices 테이블           -> 어떤 라우트도 읽지 않는다. UNION 으로만 꺼낸다
+#   D  XSS        HttpOnly 없는 쿠키       -> document.cookie 를 읽어야 한다
+FLAG_IDOR  = os.environ.get("FLAG_IDOR",  os.environ.get("FLAG", "SBOB{w3b_1d0r_1s_just_4_m1ss1ng_wh3r3}"))
+FLAG_API   = os.environ.get("FLAG_API",   "SBOB{th3_ap1_s3nds_m0r3_th4n_th3_scr33n}")
+FLAG_ADMIN = os.environ.get("FLAG_ADMIN", "SBOB{4_c00k13_1s_n0t_4n_1d3nt1ty}")
+FLAG_SQLI  = os.environ.get("FLAG_SQLI",  "SBOB{un10n_s3l3ct_r34ch3s_h1dd3n_t4bl3s}")
+FLAG_XSS   = os.environ.get("FLAG_XSS",   "SBOB{httponly_w0uld_h4v3_st0pp3d_th1s}")
+
+ADMIN_MEMO_BODY = FLAG_IDOR
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -74,12 +87,35 @@ def init_db():
                 user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 title      TEXT NOT NULL,
                 body       TEXT NOT NULL DEFAULT '',
+                secret     TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
             )
             """
         )
         db.execute("CREATE INDEX IF NOT EXISTS idx_memos_user ON memos(user_id)")
+
+        # 어떤 라우트도 이 테이블을 읽지 않는다. SQL 인젝션으로만 닿는다.
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notices (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                flag TEXT NOT NULL
+            )
+            """
+        )
+        if db.execute("SELECT 1 FROM notices").fetchone() is None:
+            db.execute("INSERT INTO notices (flag) VALUES (?)", (FLAG_SQLI,))
+
+        # CREATE TABLE IF NOT EXISTS 는 이미 있는 테이블의 스키마를 고치지 않는다.
+        # 예전 버전이 만들어 둔 DB를 만나면 컬럼을 붙여서 넘어간다.
+        for table, column, ddl in (
+            ("users", "is_admin", "is_admin INTEGER NOT NULL DEFAULT 0"),
+            ("memos", "secret", "secret TEXT NOT NULL DEFAULT ''"),
+        ):
+            cols = [c[1] for c in db.execute("PRAGMA table_info(%s)" % table)]
+            if cols and column not in cols:
+                db.execute("ALTER TABLE %s ADD COLUMN %s" % (table, ddl))
 
         admin_id = db.execute(
             "SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,)
@@ -96,8 +132,8 @@ def init_db():
         ).fetchone()
         if has_memo is None:
             db.execute(
-                "INSERT INTO memos (user_id, title, body) VALUES (?, ?, ?)",
-                (admin_id[0], ADMIN_MEMO_TITLE, ADMIN_MEMO_BODY),
+                "INSERT INTO memos (user_id, title, body, secret) VALUES (?, ?, ?, ?)",
+                (admin_id[0], ADMIN_MEMO_TITLE, ADMIN_MEMO_BODY, FLAG_API),
             )
 
 
@@ -500,6 +536,7 @@ app.jinja_loader = DictLoader({
     <p class="toolbar__count">회원 {{ rows|length }}명</p>
     <a class="btn btn--sm" href="{{ url_for('index') }}">내 메모</a>
   </div>
+  <p class="doc"><strong>관리자 전용 공지:</strong> {{ admin_flag }}</p>
   <div class="tablewrap">
     <table class="table">
       <thead>
@@ -683,6 +720,9 @@ def login():
             if VULN:
                 # [취약점 B] 서명도 암호화도 없는 평문 쿠키에 권한을 담아 내려보낸다.
                 resp.set_cookie("role", "admin" if row["is_admin"] else "user")
+                # [취약점 D] 세션 쿠키는 HttpOnly라 자바스크립트가 못 읽는다.
+                # 이 쿠키는 그게 빠져 있다. document.cookie 에 그대로 노출된다.
+                resp.set_cookie("note_pref", FLAG_XSS, httponly=False)
             return resp
 
     return render_template("login.html", username=username)
@@ -799,6 +839,9 @@ def note_json(row):
         "body": row["body"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        # [취약점 E] 화면 템플릿은 이 컬럼을 쓰지 않는다. API만 그대로 내보낸다.
+        # 화면에서 안 보이니 아무도 검토하지 않는, 전형적인 과다 노출이다.
+        "secret": row["secret"],
     }
 
 
@@ -873,7 +916,7 @@ def admin():
         ORDER BY u.id
         """
     ).fetchall()
-    return render_template("admin.html", rows=rows)
+    return render_template("admin.html", rows=rows, admin_flag=FLAG_ADMIN)
 
 
 # ---------- 에러 ----------
