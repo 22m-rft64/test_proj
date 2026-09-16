@@ -29,7 +29,8 @@ def close_db(exc):
 
 
 def init_db():
-    with sqlite3.connect(DB_PATH, exist_ok=True) as db:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    with sqlite3.connect(DB_PATH) as db:
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -60,7 +61,8 @@ def inject_user():
 # 디더 점 패턴 바탕. 애플 6색은 메뉴바 로고에서 페이지당 한 번만 쓴다.
 
 CSS = """
-:root{ --ink:#fff; --paper:#000; }
+:root{ --ink:#e8e6e1; --paper:#14140f; }
+
 *,*::before,*::after{ box-sizing:border-box; }
 
 body{

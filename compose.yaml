@@ -4,7 +4,8 @@ services:
     volumes:
       - ./data:/app/data
     env_file:
-      - .env
+      - path: .env
+        required: false
     restart: unless-stopped
 
   caddy:
